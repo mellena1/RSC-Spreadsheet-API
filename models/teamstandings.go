@@ -1,5 +1,7 @@
 package models
 
+import "fmt"
+
 // TeamStanding holds standing stats about a current Team
 type TeamStanding struct {
 	Team             Team
@@ -8,10 +10,18 @@ type TeamStanding struct {
 	DivisionRecord   *Record
 }
 
+func (t TeamStanding) String() string {
+	return fmt.Sprintf("%s %s", t.Team, t.OverallRecord)
+}
+
 // Record holds Wins and Losses
 type Record struct {
 	Wins   int
 	Losses int
+}
+
+func (r Record) String() string {
+	return fmt.Sprintf("%d-%d (%.3g)", r.Wins, r.Losses, r.WinPercentage())
 }
 
 // GamesPlayed calculates how many games this team has played
