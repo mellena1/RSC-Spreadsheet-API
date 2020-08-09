@@ -5,6 +5,9 @@ import (
 
 	"github.com/mellena1/RSC-Spreadsheet-API/data/sheets"
 	"github.com/mellena1/RSC-Spreadsheet-API/models"
+	log "github.com/sirupsen/logrus"
+
+	_ "github.com/lib/pq"
 )
 
 type Datastore interface {
@@ -17,8 +20,8 @@ type DB struct {
 	teamStandingsUpdater sheets.TeamStandingsRetriever
 }
 
-func NewDB(dataSourceName string, teamStandingsSheet sheets.TeamStandingsRetriever) (*DB, error) {
-	db, err := sql.Open("postgres", dataSourceName)
+func NewDB(connStr string, teamStandingsSheet sheets.TeamStandingsRetriever) (*DB, error) {
+	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +40,15 @@ func NewDB(dataSourceName string, teamStandingsSheet sheets.TeamStandingsRetriev
 		return nil, err
 	}
 
+	if err = newdb.fillTeamData(); err != nil {
+		return nil, err
+	}
+
 	return newdb, nil
+}
+
+func (d *DB) Close() error {
+	return d.sqlDB.Close()
 }
 
 func (d *DB) makeTablesIfNotExist() error {
@@ -47,13 +58,46 @@ func (d *DB) makeTablesIfNotExist() error {
 	}
 
 	_, err = tx.Exec(`
-		CREATE TABLE IF NOT EXISTS teamstanding (
-			teamID text NOTNULL
-
+		CREATE TABLE IF NOT EXISTS team (
+			team_id SERIAL PRIMARY KEY,
+			name text NOT NULL,
+			franchise text NOT NULL,
+			conference text NOT NULL,
+			tier text NOT NULL,
+			division text,
+			UNIQUE(name, franchise, tier)
 		);
 	`)
 	if err != nil {
-		return tx.Rollback()
+		log.Errorf("Failed to make team table: %v", err)
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (d *DB) fillTeamData() error {
+	teamData, err := d.teamStandingsUpdater.GetTeamStandingsFromSheet()
+	if err != nil {
+		return err
+	}
+
+	tx, err := d.sqlDB.Begin()
+	if err != nil {
+		return err
+	}
+
+	for _, t := range teamData {
+		_, err = tx.Exec(`
+			INSERT INTO team (name, franchise, conference, tier, division) 
+			VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING;
+		`, t.Team.Name, t.Team.Franchise, t.Team.Conference, t.Team.Tier, t.Team.Division)
+		if err != nil {
+			log.Errorf("Failed to insert team into team table: %v", err)
+			tx.Rollback()
+			return err
+		}
 	}
 
 	return tx.Commit()

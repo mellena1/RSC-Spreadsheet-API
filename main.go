@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 
 	"github.com/gorilla/mux"
+	"github.com/mellena1/RSC-Spreadsheet-API/data/db"
 	"github.com/mellena1/RSC-Spreadsheet-API/data/sheets"
 	"github.com/mellena1/RSC-Spreadsheet-API/handler"
 	log "github.com/sirupsen/logrus"
@@ -26,18 +26,25 @@ func main() {
 		"All Teams Data",
 		os.Getenv("RSC_SHEETS_API_TOKEN"),
 	)
-
 	if err != nil {
 		log.Fatalf("Error making TeamStandingsSheet: %v\n", err)
 	}
 
-	teams, err := teamStandings.GetTeamStandingsFromSheet()
-	if err != nil {
-		log.Fatalf("Error getting Teams: %v\n", err)
-	}
+	// teams, err := teamStandings.GetTeamStandingsFromSheet()
+	// if err != nil {
+	// 	log.Fatalf("Error getting Teams: %v\n", err)
+	// }
 
-	for _, t := range teams {
-		fmt.Println(t)
+	// for _, t := range teams {
+	// 	fmt.Println(t)
+	// }
+
+	mydb, err := db.NewDB("postgres://postgres:password@localhost?sslmode=disable", teamStandings)
+	if err != nil {
+		log.Fatalf("Error making db: %v\n", err)
+	}
+	if err := mydb.Close(); err != nil {
+		log.Fatalf("Error closing db: %v\n", err)
 	}
 }
 
