@@ -19,6 +19,14 @@ type RouterCreator interface {
 	AddRoutes(*mux.Router)
 }
 
+func fatalIfMissingEnvVar(key string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return v
+	}
+	log.Fatalf("Must set env var: %s", key)
+	return ""
+}
+
 func getEnvOrDefault(key, _default string) string {
 	if v, ok := os.LookupEnv(key); ok {
 		return v
@@ -44,7 +52,7 @@ func makeDB() *db.DB {
 		context.TODO(),
 		"1l99BZtpFdVB8M6xB7VJii4aAj5O33u6HUvZLGfwHB0k",
 		"All Teams Data",
-		os.Getenv("RSC_SHEETS_API_TOKEN"),
+		fatalIfMissingEnvVar("RSC_SHEETS_API_TOKEN"),
 	)
 	if err != nil {
 		log.Fatalf("Error making TeamStandingsSheet: %v\n", err)
@@ -54,7 +62,7 @@ func makeDB() *db.DB {
 		"postgres://%s:%s@%s?sslmode=disable",
 		getEnvOrDefault("DB_USER", "postgres"),
 		getEnvOrDefault("DB_PASS", "password"),
-		os.Getenv("DB_HOST"),
+		fatalIfMissingEnvVar("DB_HOST"),
 	)
 	mydb, err := db.NewDB(dbStr, teamStandings)
 	if err != nil {

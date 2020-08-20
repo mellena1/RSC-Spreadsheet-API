@@ -12,7 +12,7 @@ import (
 
 // TeamHandler has all routes for team related queries
 type TeamHandler struct {
-	DB *db.DB
+	DB db.Datastore
 }
 
 // AddRoutes adds all of it's routes to the router
@@ -23,6 +23,7 @@ func (t *TeamHandler) AddRoutes(router *mux.Router) {
 
 	router.HandleFunc("", t.getAllTeams).Methods("GET")
 	router.HandleFunc("/", t.getAllTeams).Methods("GET")
+	router.HandleFunc("/{team}", t.getTeam).Methods("GET")
 }
 
 type teamsListResp struct {
@@ -30,8 +31,27 @@ type teamsListResp struct {
 }
 
 func (t *TeamHandler) getAllTeams(w http.ResponseWriter, r *http.Request) {
-	teams, err := t.DB.GetAllTeams()
-	if err != nil {
+	if err := r.ParseForm(); err != nil {
+		log.Errorf("Invalid URL query string: %s", err)
+		writeError(w, "Invalid query", http.StatusBadRequest)
+		return
+	}
+
+	query := db.GetAllTeamsQuery{
+		TeamIDs:     r.Form["id"],
+		Names:       r.Form["name"],
+		Franchises:  r.Form["franchise"],
+		Conferences: r.Form["conference"],
+		Tiers:       r.Form["tier"],
+		Divisions:   r.Form["division"],
+	}
+
+	teams, err := t.DB.GetAllTeams(query)
+	if err == db.ErrInvalidTypeForQuery {
+		log.Warn("Invalid query param for team")
+		writeError(w, "Team IDs must be an integers", http.StatusBadRequest)
+		return
+	} else if err != nil {
 		log.Errorf("Unable to fetch teams from db: %s", err)
 		writeError(w, "Failed to fetch teams from db", http.StatusInternalServerError)
 		return
@@ -40,7 +60,38 @@ func (t *TeamHandler) getAllTeams(w http.ResponseWriter, r *http.Request) {
 	msg, err := json.Marshal(&teamsListResp{Teams: teams})
 	if err != nil {
 		log.Errorf("Unable to marshal teams: %s", err)
-		writeError(w, "Error sending teams", http.StatusInternalServerError)
+		writeError(w, "Error sending team", http.StatusInternalServerError)
+		return
+	}
+	w.Write(msg)
+}
+
+func (t *TeamHandler) getTeam(w http.ResponseWriter, r *http.Request) {
+	teamID := mux.Vars(r)["team"]
+	query := db.GetAllTeamsQuery{
+		TeamIDs: []string{teamID},
+	}
+
+	teams, err := t.DB.GetAllTeams(query)
+	if err == db.ErrInvalidTypeForQuery {
+		log.Warnf("Invalid team id: %s", teamID)
+		writeError(w, "Team ID must be an integer", http.StatusBadRequest)
+		return
+	} else if err != nil {
+		log.Errorf("Unable to fetch team from db: %s", err)
+		writeError(w, "Failed to fetch team from db", http.StatusInternalServerError)
+		return
+	}
+
+	if len(teams) == 0 {
+		writeError(w, "Team not found", http.StatusNotFound)
+		return
+	}
+
+	msg, err := json.Marshal(&teams[0])
+	if err != nil {
+		log.Errorf("Unable to marshal teams: %s", err)
+		writeError(w, "Error sending team", http.StatusInternalServerError)
 		return
 	}
 	w.Write(msg)

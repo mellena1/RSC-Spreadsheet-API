@@ -11,7 +11,7 @@ import (
 )
 
 type Datastore interface {
-	GetAllTeams() ([]models.Team, error)
+	GetAllTeams(GetAllTeamsQuery) ([]models.Team, error)
 }
 
 type DB struct {
