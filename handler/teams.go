@@ -23,7 +23,7 @@ func (t *TeamHandler) AddRoutes(router *mux.Router) {
 
 	router.HandleFunc("", t.getAllTeams).Methods("GET")
 	router.HandleFunc("/", t.getAllTeams).Methods("GET")
-	router.HandleFunc("/{team}", t.getTeam).Methods("GET")
+	router.HandleFunc("/{id}", t.getTeam).Methods("GET")
 }
 
 type teamsListResp struct {
@@ -67,7 +67,7 @@ func (t *TeamHandler) getAllTeams(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *TeamHandler) getTeam(w http.ResponseWriter, r *http.Request) {
-	teamID := mux.Vars(r)["team"]
+	teamID := mux.Vars(r)["id"]
 	query := db.GetAllTeamsQuery{
 		TeamIDs: []string{teamID},
 	}
