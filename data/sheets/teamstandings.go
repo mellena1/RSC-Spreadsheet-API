@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/mellena1/RSC-Spreadsheet-API/models"
+	"github.com/mellena1/RSC-Spreadsheet-API/data/models"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
@@ -14,7 +14,7 @@ import (
 const TEAMSTANDINGSHEADERS = 2
 
 type TeamStandingsRetriever interface {
-	GetTeamStandingsFromSheet() ([]models.TeamStanding, error)
+	GetTeamStandingsFromSheet() ([]TeamStanding, error)
 }
 
 type TeamStandingsSheet struct {
@@ -32,7 +32,7 @@ func NewTeamStandingsSheet(ctx context.Context, spreadsheetID, sheetName, apiKey
 	}, err
 }
 
-func (t TeamStandingsSheet) GetTeamStandingsFromSheet() ([]models.TeamStanding, error) {
+func (t TeamStandingsSheet) GetTeamStandingsFromSheet() ([]TeamStanding, error) {
 	result, err := t.sheetsService.Spreadsheets.Values.Get(t.spreadsheetID, t.sheetName).Do()
 	if err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func (t TeamStandingsSheet) GetTeamStandingsFromSheet() ([]models.TeamStanding, 
 
 	rows := result.Values[TEAMSTANDINGSHEADERS:]
 
-	standings := make([]models.TeamStanding, 0, len(rows))
+	standings := make([]TeamStanding, 0, len(rows))
 	for i, row := range rows {
 		standing, err := rowToTeamStanding(row)
 		if err != nil {
@@ -53,7 +53,21 @@ func (t TeamStandingsSheet) GetTeamStandingsFromSheet() ([]models.TeamStanding, 
 	return standings, nil
 }
 
-func setTeamStandingValBasedOnColumn(t *models.TeamStanding, colIndex int, val interface{}) error {
+// TeamStanding holds standing stats about a current Team
+type TeamStanding struct {
+	Team             models.Team
+	OverallRecord    Record
+	ConferenceRecord Record
+	DivisionRecord   *Record
+}
+
+// Record holds Wins and Losses
+type Record struct {
+	Wins   int
+	Losses int
+}
+
+func setTeamStandingValBasedOnColumn(t *TeamStanding, colIndex int, val interface{}) error {
 	valStr, err := assertToString(val)
 	if err != nil {
 		return err
@@ -107,7 +121,7 @@ func setTeamStandingValBasedOnColumn(t *models.TeamStanding, colIndex int, val i
 			return err
 		}
 		if t.DivisionRecord == nil {
-			t.DivisionRecord = &models.Record{}
+			t.DivisionRecord = &Record{}
 		}
 		t.DivisionRecord.Wins = wins
 	case 18:
@@ -119,24 +133,24 @@ func setTeamStandingValBasedOnColumn(t *models.TeamStanding, colIndex int, val i
 			return err
 		}
 		if t.DivisionRecord == nil {
-			t.DivisionRecord = &models.Record{}
+			t.DivisionRecord = &Record{}
 		}
 		t.DivisionRecord.Losses = losses
 	}
 	return nil
 }
 
-func rowToTeamStanding(row []interface{}) (models.TeamStanding, error) {
-	teamStanding := models.TeamStanding{}
+func rowToTeamStanding(row []interface{}) (TeamStanding, error) {
+	standing := TeamStanding{}
 
 	for i, val := range row {
-		err := setTeamStandingValBasedOnColumn(&teamStanding, i, val)
+		err := setTeamStandingValBasedOnColumn(&standing, i, val)
 		if err != nil {
-			return teamStanding, err
+			return standing, err
 		}
 	}
 
-	return teamStanding, nil
+	return standing, nil
 }
 
 func assertToString(val interface{}) (string, error) {

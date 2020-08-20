@@ -4,13 +4,12 @@ import "fmt"
 
 // Team describes a team
 type Team struct {
-	Name       string
-	Franchise  string
-	Tier       string
-	Conference string
-	Division   *string
-	PlayerIDs  []string
-	Stats      Stats
+	TeamID     string  `json:"id"`
+	Name       string  `json:"name"`
+	Franchise  string  `json:"franchise"`
+	Tier       string  `json:"tier"`
+	Conference string  `json:"conference"`
+	Division   *string `json:"division,omitempty"`
 }
 
 func (t Team) String() string {
@@ -27,7 +26,7 @@ type Player struct {
 
 // Stats holds stats about an entity
 type Stats struct {
-	Record  Record
+	// Record  Record
 	Goals   int
 	Assists int
 	Saves   int

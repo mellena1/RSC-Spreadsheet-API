@@ -3,15 +3,15 @@ package db
 import (
 	"database/sql"
 
+	"github.com/mellena1/RSC-Spreadsheet-API/data/models"
 	"github.com/mellena1/RSC-Spreadsheet-API/data/sheets"
-	"github.com/mellena1/RSC-Spreadsheet-API/models"
 	log "github.com/sirupsen/logrus"
 
 	_ "github.com/lib/pq"
 )
 
 type Datastore interface {
-	AllTeamStandings() ([]models.TeamStanding, error)
+	GetAllTeams() ([]models.Team, error)
 }
 
 type DB struct {
@@ -47,12 +47,12 @@ func NewDB(connStr string, teamStandingsSheet sheets.TeamStandingsRetriever) (*D
 	return newdb, nil
 }
 
-func (d *DB) Close() error {
-	return d.sqlDB.Close()
+func (db *DB) Close() error {
+	return db.sqlDB.Close()
 }
 
-func (d *DB) makeTablesIfNotExist() error {
-	tx, err := d.sqlDB.Begin()
+func (db *DB) makeTablesIfNotExist() error {
+	tx, err := db.sqlDB.Begin()
 	if err != nil {
 		return err
 	}
@@ -77,13 +77,13 @@ func (d *DB) makeTablesIfNotExist() error {
 	return tx.Commit()
 }
 
-func (d *DB) fillTeamData() error {
-	teamData, err := d.teamStandingsUpdater.GetTeamStandingsFromSheet()
+func (db *DB) fillTeamData() error {
+	teamData, err := db.teamStandingsUpdater.GetTeamStandingsFromSheet()
 	if err != nil {
 		return err
 	}
 
-	tx, err := d.sqlDB.Begin()
+	tx, err := db.sqlDB.Begin()
 	if err != nil {
 		return err
 	}

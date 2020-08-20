@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 
+	gorillaHandlers "github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/mellena1/RSC-Spreadsheet-API/data/db"
 	"github.com/mellena1/RSC-Spreadsheet-API/data/sheets"
@@ -14,12 +16,30 @@ import (
 
 // RouterCreator a handler that can return a gorilla mux router for path prefixes
 type RouterCreator interface {
-	Router() *mux.Router
+	AddRoutes(*mux.Router)
+}
+
+func getEnvOrDefault(key, _default string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return v
+	}
+	return _default
 }
 
 func main() {
-	// runHTTPServer()
+	mydb := makeDB()
+	defer mydb.Close()
 
+	router := makeHTTPRouter(mydb)
+	log.Info("Serving on :8080")
+	log.Fatal(http.ListenAndServe(":8080", router))
+
+	if err := mydb.Close(); err != nil {
+		log.Fatalf("Error closing db: %v\n", err)
+	}
+}
+
+func makeDB() *db.DB {
 	teamStandings, err := sheets.NewTeamStandingsSheet(
 		context.TODO(),
 		"1l99BZtpFdVB8M6xB7VJii4aAj5O33u6HUvZLGfwHB0k",
@@ -30,33 +50,32 @@ func main() {
 		log.Fatalf("Error making TeamStandingsSheet: %v\n", err)
 	}
 
-	// teams, err := teamStandings.GetTeamStandingsFromSheet()
-	// if err != nil {
-	// 	log.Fatalf("Error getting Teams: %v\n", err)
-	// }
-
-	// for _, t := range teams {
-	// 	fmt.Println(t)
-	// }
-
-	mydb, err := db.NewDB("postgres://postgres:password@localhost?sslmode=disable", teamStandings)
+	dbStr := fmt.Sprintf(
+		"postgres://%s:%s@%s?sslmode=disable",
+		getEnvOrDefault("DB_USER", "postgres"),
+		getEnvOrDefault("DB_PASS", "password"),
+		os.Getenv("DB_HOST"),
+	)
+	mydb, err := db.NewDB(dbStr, teamStandings)
 	if err != nil {
 		log.Fatalf("Error making db: %v\n", err)
 	}
-	if err := mydb.Close(); err != nil {
-		log.Fatalf("Error closing db: %v\n", err)
-	}
+
+	return mydb
 }
 
-func runHTTPServer() {
+func makeHTTPRouter(_db *db.DB) http.Handler {
 	router := mux.NewRouter()
 
-	childRouters := getChildRouters()
+	childRouters := getChildRouters(_db)
 	for _, c := range childRouters {
-		router.PathPrefix(c.PathPrefix).Handler(c.Child.Router())
+		subR := router.PathPrefix(c.PathPrefix).Subrouter()
+		c.Child.AddRoutes(subR)
 	}
 
-	http.Handle("/", router)
+	loggingRouterHandler := gorillaHandlers.LoggingHandler(os.Stdout, router)
+
+	return loggingRouterHandler
 }
 
 // ChildRouter holds a child handler that can be used for path prefixes
@@ -65,11 +84,13 @@ type ChildRouter struct {
 	Child      RouterCreator
 }
 
-func getChildRouters() []ChildRouter {
+func getChildRouters(_db *db.DB) []ChildRouter {
 	return []ChildRouter{
 		{
-			PathPrefix: "/standings/",
-			Child:      &handler.StandingsHandler{},
+			PathPrefix: "/team",
+			Child: &handler.TeamHandler{
+				DB: _db,
+			},
 		},
 	}
 }
