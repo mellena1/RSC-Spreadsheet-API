@@ -1,0 +1,31 @@
+kind: pipeline
+name: default
+
+steps:
+- name: Go-Mod-Download
+  image: golang:1.15
+  volumes:
+  - name: gomod_cache
+    path: /go/pkg/mod
+  commands:
+  - go mod download
+
+- name: Run-go-tests
+  image: golang:1.15
+  volumes:
+  - name: gomod_cache
+    path: /go/pkg/mod
+  commands:
+  - make test
+
+- name: gofmt
+  image: golang:1.12.5
+  volumes:
+  - name: gomod_cache
+    path: /go/pkg/mod
+  commands:
+  - go fmt ./... | [ $(wc -l) -eq 0 ]
+
+volumes:
+- name: gomod_cache
+  temp: {}
