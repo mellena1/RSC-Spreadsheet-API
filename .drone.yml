@@ -26,6 +26,21 @@ steps:
   commands:
   - go fmt ./... | [ $(wc -l) -eq 0 ]
 
+- name: Build-image-and-push
+  image: plugins/docker
+  settings:
+    repo: mellena1/rsc-spreadsheet-api
+    auto_tag: true
+    username: mellena1
+    password:
+      from_secret: password
+  when:
+    branch:
+    - master
+    event:
+    - push
+    - tag
+
 volumes:
 - name: gomod_cache
   temp: {}
