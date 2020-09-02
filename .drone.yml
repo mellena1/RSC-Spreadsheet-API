@@ -19,7 +19,7 @@ steps:
   - make test
 
 - name: gofmt
-  image: golang:1.12.5
+  image: golang:1.15
   volumes:
   - name: gomod_cache
     path: /go/pkg/mod
