@@ -49,7 +49,7 @@ func (t *TeamHandler) getAllTeams(w http.ResponseWriter, r *http.Request) {
 	teams, err := t.DB.GetAllTeams(query)
 	if err == db.ErrInvalidTypeForQuery {
 		log.Warn("Invalid query param for team")
-		writeError(w, "Team IDs must be an integers", http.StatusBadRequest)
+		writeError(w, "Team IDs must be integers", http.StatusBadRequest)
 		return
 	} else if err != nil {
 		log.Errorf("Unable to fetch teams from db: %s", err)

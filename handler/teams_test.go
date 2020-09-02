@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
+
+var errRandom = errors.New("random error")
 
 type datastoreEmptyMock struct {
 	db.Datastore
@@ -94,6 +97,7 @@ func strPointer(s string) *string {
 
 func Test_getAllTeams(t *testing.T) {
 	tests := []struct {
+		name               string
 		mockDB             db.Datastore
 		requestPath        string
 		requestMethod      string
@@ -101,6 +105,7 @@ func Test_getAllTeams(t *testing.T) {
 		expectedStatusCode int
 	}{
 		{
+			name:               "Request with params",
 			requestPath:        "/?id=1&id=2&name=A&franchise=B&conference=C&tier=D&division=E",
 			requestMethod:      "GET",
 			expectedResp:       `{"teams":[{"id":"1","name":"A","franchise":"B","tier":"D","conference":"C","division":"E"},{"id":"2","name":"A","franchise":"B","tier":"D","conference":"C","division":"E"}]}`,
@@ -122,6 +127,50 @@ func Test_getAllTeams(t *testing.T) {
 				err: nil,
 			},
 		},
+		{
+			name:               "Request all teams",
+			requestPath:        "/",
+			requestMethod:      "GET",
+			expectedResp:       `{"teams":[{"id":"1","name":"A","franchise":"B","tier":"D","conference":"C","division":"E"},{"id":"2","name":"A","franchise":"B","tier":"D","conference":"C","division":"E"}]}`,
+			expectedStatusCode: 200,
+			mockDB: getAllTeamsMockDB{
+				t:                t,
+				expectedQueryVal: db.GetAllTeamsQuery{},
+				resp: []models.Team{
+					{TeamID: "1", Name: "A", Franchise: "B", Conference: "C", Tier: "D", Division: strPointer("E")},
+					{TeamID: "2", Name: "A", Franchise: "B", Conference: "C", Tier: "D", Division: strPointer("E")},
+				},
+				err: nil,
+			},
+		},
+		{
+			name:               "DB bad query type",
+			requestPath:        "/?id=abc",
+			requestMethod:      "GET",
+			expectedResp:       `{"error":"Team IDs must be integers"}`,
+			expectedStatusCode: 400,
+			mockDB: getAllTeamsMockDB{
+				t: t,
+				expectedQueryVal: db.GetAllTeamsQuery{
+					TeamIDs: []string{"abc"},
+				},
+				resp: []models.Team{},
+				err:  db.ErrInvalidTypeForQuery,
+			},
+		},
+		{
+			name:               "DB random error",
+			requestPath:        "/",
+			requestMethod:      "GET",
+			expectedResp:       `{"error":"Failed to fetch teams from db"}`,
+			expectedStatusCode: 500,
+			mockDB: getAllTeamsMockDB{
+				t:                t,
+				expectedQueryVal: db.GetAllTeamsQuery{},
+				resp:             []models.Team{},
+				err:              errRandom,
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -134,11 +183,103 @@ func Test_getAllTeams(t *testing.T) {
 		url := fmt.Sprintf("%s%s", server.URL, test.requestPath)
 		req, _ := http.NewRequest(test.requestMethod, url, nil)
 		actual, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
+		require.NoErrorf(t, err, "%q should not have errored", test.name)
 		t.Cleanup(func() { actual.Body.Close() })
-		require.Equal(t, test.expectedStatusCode, actual.StatusCode)
+		require.Equalf(t, test.expectedStatusCode, actual.StatusCode, "%q wrong status code", test.name)
 		body, err := ioutil.ReadAll(actual.Body)
-		require.NoError(t, err)
-		require.Equal(t, test.expectedResp, string(body))
+		require.NoErrorf(t, err, "%q should not have errored", test.name)
+		require.Equalf(t, test.expectedResp, string(body), "%q wrong resp", test.name)
+	}
+}
+
+func Test_getTeam(t *testing.T) {
+	tests := []struct {
+		name               string
+		mockDB             db.Datastore
+		requestPath        string
+		requestMethod      string
+		expectedResp       string
+		expectedStatusCode int
+	}{
+		{
+			name:               "Request",
+			requestPath:        "/1",
+			requestMethod:      "GET",
+			expectedResp:       `{"id":"1","name":"A","franchise":"B","tier":"D","conference":"C","division":"E"}`,
+			expectedStatusCode: 200,
+			mockDB: getAllTeamsMockDB{
+				t: t,
+				expectedQueryVal: db.GetAllTeamsQuery{
+					TeamIDs: []string{"1"},
+				},
+				resp: []models.Team{
+					{TeamID: "1", Name: "A", Franchise: "B", Conference: "C", Tier: "D", Division: strPointer("E")},
+				},
+				err: nil,
+			},
+		},
+		{
+			name:               "Invalid team ID",
+			requestPath:        "/abc",
+			requestMethod:      "GET",
+			expectedResp:       `{"error":"Team ID must be an integer"}`,
+			expectedStatusCode: 400,
+			mockDB: getAllTeamsMockDB{
+				t: t,
+				expectedQueryVal: db.GetAllTeamsQuery{
+					TeamIDs: []string{"abc"},
+				},
+				resp: []models.Team{},
+				err:  db.ErrInvalidTypeForQuery,
+			},
+		},
+		{
+			name:               "Some db error",
+			requestPath:        "/1",
+			requestMethod:      "GET",
+			expectedResp:       `{"error":"Failed to fetch team from db"}`,
+			expectedStatusCode: 500,
+			mockDB: getAllTeamsMockDB{
+				t: t,
+				expectedQueryVal: db.GetAllTeamsQuery{
+					TeamIDs: []string{"1"},
+				},
+				resp: []models.Team{},
+				err:  errRandom,
+			},
+		},
+		{
+			name:               "No team matched",
+			requestPath:        "/1",
+			requestMethod:      "GET",
+			expectedResp:       `{"error":"Team not found"}`,
+			expectedStatusCode: 404,
+			mockDB: getAllTeamsMockDB{
+				t: t,
+				expectedQueryVal: db.GetAllTeamsQuery{
+					TeamIDs: []string{"1"},
+				},
+				resp: []models.Team{},
+				err:  nil,
+			},
+		},
+	}
+
+	for _, test := range tests {
+		tHandler := TeamHandler{DB: test.mockDB}
+		router := mux.NewRouter()
+		tHandler.AddRoutes(router)
+		server := httptest.NewServer(router)
+		t.Cleanup(server.Close)
+
+		url := fmt.Sprintf("%s%s", server.URL, test.requestPath)
+		req, _ := http.NewRequest(test.requestMethod, url, nil)
+		actual, err := http.DefaultClient.Do(req)
+		require.NoErrorf(t, err, "%q should not have errored", test.name)
+		t.Cleanup(func() { actual.Body.Close() })
+		require.Equalf(t, test.expectedStatusCode, actual.StatusCode, "%q wrong status code", test.name)
+		body, err := ioutil.ReadAll(actual.Body)
+		require.NoErrorf(t, err, "%q should not have errored", test.name)
+		require.Equalf(t, test.expectedResp, string(body), "%q wrong resp", test.name)
 	}
 }
