@@ -2,7 +2,8 @@ package models
 
 import "fmt"
 
-// Team describes a team
+// Team an RSC Team
+// swagger:response models_Team
 type Team struct {
 	TeamID     string  `json:"id"`
 	Name       string  `json:"name"`

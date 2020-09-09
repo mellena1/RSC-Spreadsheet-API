@@ -26,10 +26,28 @@ func (t *TeamHandler) AddRoutes(router *mux.Router) {
 	router.HandleFunc("/{id}", t.getTeam).Methods("GET")
 }
 
+// teamsListResp A List of Teams
+// swagger:response teamsListResp
 type teamsListResp struct {
+	// in: body
 	Teams []models.Team `json:"teams"`
 }
 
+// swagger:parameters getAllTeams
+type getAllTeamsParams struct {
+	ID         []int    `json:"id"`
+	Name       []string `json:"name"`
+	Franchise  []string `json:"franchise"`
+	Conference []string `json:"conference"`
+	Tier       []string `json:"tier"`
+	Division   []string `json:"division"`
+}
+
+// getAllTeams is a handler to get all teams
+// swagger:route GET /team getAllTeams
+// Gets all RSC teams
+// Responses:
+// 	 200: teamsListResp
 func (t *TeamHandler) getAllTeams(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		log.Errorf("Invalid URL query string: %s", err)
@@ -66,6 +84,11 @@ func (t *TeamHandler) getAllTeams(w http.ResponseWriter, r *http.Request) {
 	w.Write(msg)
 }
 
+// getTeam is a handler to get a single team
+// swagger:route GET /team/{id} getTeam
+// Gets a RSC team by id
+// Responses:
+// 	 200: models_Team
 func (t *TeamHandler) getTeam(w http.ResponseWriter, r *http.Request) {
 	teamID := mux.Vars(r)["id"]
 	query := db.GetAllTeamsQuery{
